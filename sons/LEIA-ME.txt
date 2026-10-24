@@ -1,0 +1,5 @@
+Pasta para áudios extras da pegadinha (mp3, m4a, wav ou ogg).
+
+Hoje a pegadinha não usa áudio extra: no CONFIRMA toca só o trinado normal da urna.
+Se quiser tocar algo junto com a troca, coloque o arquivo aqui e aponte o campo `som`
+no objeto PEGADINHA do index.html, por exemplo: som: 'sons/lula.mp3'.

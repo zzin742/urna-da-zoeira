@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulação Urna Eletrônica</title>
+<style>
+  :root{
+    --bg:#2a2d31; --body:#e4e7e5; --body2:#cfd3d1; --bezel:#121212;
+    --key:#2b2b2b; --key2:#171717; --branco:#f3f3f1; --corrige:#f0691c; --confirma:#3fd08f;
+    --emboss-hi:#f7f8f7; --emboss-lo:#b4b8b6;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:#ddd;font-family:"Helvetica Neue",Arial,"Liberation Sans",sans-serif;min-height:100vh;overflow-x:hidden}
+  .wrap{display:flex;flex-direction:column;align-items:center;padding:24px 16px 40px}
+  .stage{width:760px;height:540px;position:relative;transform-origin:top center}
+  .urna{position:absolute;inset:0;border-radius:16px;
+    background:linear-gradient(180deg,#eef0ee 0%,var(--body) 35%,#d9ddda 100%);
+    box-shadow:0 30px 60px rgba(0,0,0,.55),0 2px 0 #fff inset,0 -3px 0 #b9bdbb inset,0 0 0 1px #aeb2b0;
+  }
+  .urna::before{content:"";position:absolute;left:0;right:0;bottom:-10px;height:14px;border-radius:0 0 18px 18px;background:#b5b9b7;z-index:-1}
+  /* slots laterais */
+  .slot{position:absolute;top:382px;width:8px;height:20px;background:#6a6d6c;border-radius:2px;box-shadow:inset 0 1px 2px #333}
+  .slot.l{left:12px}.slot.r{right:12px}
+  /* moldura e tela */
+  .bezel{position:absolute;left:82px;top:12px;width:596px;height:296px;border-radius:9px;
+    background:linear-gradient(180deg,#1b1b1b,#0f0f0f);
+    box-shadow:inset 0 1px 0 #3a3a3a,inset 0 -1px 0 #000,0 1px 0 #fff;}
+  .bezel::after{content:"";position:absolute;inset:0;border-radius:9px;background:linear-gradient(115deg,rgba(255,255,255,.06),rgba(255,255,255,0) 40%);pointer-events:none}
+  .display{position:absolute;left:63px;top:10px;width:470px;height:275px;background:#000;overflow:hidden;color:#000;font-size:13px;line-height:1.25}
+  .display.on{background:#fff}
+  .display .sim{position:absolute;left:0;right:0;top:0;height:15px;line-height:15px;background:#ffd400;color:#000;font-size:9.5px;font-weight:700;letter-spacing:1.6px;text-align:center;z-index:5}
+  .display *{font-family:Arial,"Liberation Sans","Helvetica Neue",sans-serif}
+  /* teclado */
+  .keys{position:absolute;left:318px;top:330px;width:186px}
+  .key{position:absolute;width:54px;height:38px;border-radius:6px;border:0;cursor:pointer;padding:0;
+    background:linear-gradient(180deg,#3d3d3d,#242424 60%,#1c1c1c);
+    box-shadow:0 4px 0 #0a0a0a,0 5px 3px rgba(0,0,0,.45),inset 0 1px 0 #555;
+    color:#fff;font-weight:700;font-size:19px;text-align:left;user-select:none;-webkit-user-select:none;touch-action:manipulation;transition:transform .04s,box-shadow .04s}
+  .key span.n{position:absolute;left:8px;top:7px;font-family:Arial,sans-serif}
+  .key .br{position:absolute;right:8px;top:9px;display:grid;grid-template-columns:4px 4px;grid-template-rows:4px 4px 4px;gap:2px}
+  .key .br i{width:4px;height:4px;border-radius:50%;background:#d6d6d6;box-shadow:0 1px 0 rgba(0,0,0,.6)}
+  .key .br i.o{background:transparent;box-shadow:none}
+  .key.fn .br{position:static;display:flex;justify-content:center;gap:5px;margin-top:20px}
+  .key.fn .br i{background:rgba(0,0,0,.55);box-shadow:0 1px 0 rgba(255,255,255,.35)}
+  .key.fn .br i.o{background:transparent;box-shadow:none}
+  .key.fn .br .cell{display:grid;grid-template-columns:4px 4px;grid-template-rows:4px 4px 4px;gap:2px}
+  .key:active,.key.down{transform:translateY(3px);box-shadow:0 1px 0 #0a0a0a,0 1px 2px rgba(0,0,0,.4),inset 0 1px 0 #555}
+  .key.fn{width:92px;color:#111;font-size:11px;letter-spacing:.3px;text-align:center}
+  .key.fn span.t{position:absolute;left:0;right:0;top:6px;font-weight:700}
+    .key.branco{background:linear-gradient(180deg,#fff,#ededeb 60%,#dedcd8);box-shadow:0 4px 0 #a9a8a3,0 5px 3px rgba(0,0,0,.35),inset 0 1px 0 #fff}
+  .key.corrige{background:linear-gradient(180deg,#ff8a3d,#f0691c 60%,#d9560f);box-shadow:0 4px 0 #8f3607,0 5px 3px rgba(0,0,0,.4),inset 0 1px 0 #ffb37f}
+  .key.confirma{background:linear-gradient(180deg,#6fe3ad,#3fd08f 60%,#2fb878);box-shadow:0 4px 0 #1b7a4d,0 5px 3px rgba(0,0,0,.4),inset 0 1px 0 #a9f0cf}
+  .key.branco:active,.key.branco.down{box-shadow:0 1px 0 #a9a8a3,inset 0 1px 0 #fff}
+  .key.corrige:active,.key.corrige.down{box-shadow:0 1px 0 #8f3607,inset 0 1px 0 #ffb37f}
+  .key.confirma:active,.key.confirma.down{box-shadow:0 1px 0 #1b7a4d,inset 0 1px 0 #a9f0cf}
+  /* identificação em relevo */
+  .emb{position:absolute;color:#dcdfdd;text-shadow:-1px -1px 0 var(--emboss-hi),1px 1px 0 var(--emboss-lo);font-weight:700;letter-spacing:.5px}
+  .logo{left:118px;top:362px;width:182px;height:74px;border-radius:5px;box-shadow:inset 1px 1px 0 var(--emboss-lo),inset -1px -1px 0 var(--emboss-hi),1px 1px 0 var(--emboss-hi),-1px -1px 0 var(--emboss-lo);display:flex;align-items:center;gap:8px;padding:6px 8px}
+  .logo svg{width:52px;height:52px;flex:none}
+  .logo .t{font-size:18px;line-height:1.05;font-style:italic;font-weight:600}
+  .model{left:118px;top:446px;width:182px;height:28px;border-radius:5px;box-shadow:inset 1px 1px 0 var(--emboss-lo),inset -1px -1px 0 var(--emboss-hi),1px 1px 0 var(--emboss-hi),-1px -1px 0 var(--emboss-lo);display:flex;align-items:center;justify-content:center;font-size:17px;font-style:italic;letter-spacing:2px}
+  /* ---- conteúdo da tela ---- */
+  .scr{position:absolute;inset:0;padding:21px 12px 5px 14px;display:flex;flex-direction:column}
+  .svp{font-size:11px;font-weight:700;letter-spacing:.2px}
+  .main{display:flex;flex:1;min-height:0}
+  .left{flex:1;padding-top:2px}
+  .cargo{font-size:21px;font-weight:700;margin:3px 0 6px 0;text-align:left}
+  .sub{font-size:12px;font-weight:700;margin:-6px 0 8px 0}
+  .ln{display:flex;align-items:center;margin:0 0 5px 0;font-size:13px;min-height:16px}
+  .ln b{font-weight:400;margin-right:6px;white-space:nowrap}
+  .ln .v{font-weight:700}
+  .digits{display:flex;gap:4px}
+  .dg{width:24px;height:30px;border:1.5px solid #000;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:700;background:#fff}
+  .right{width:150px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;padding-top:4px}
+  .ph{display:flex;flex-direction:column;align-items:center}
+  .ph .box{width:60px;height:72px;border:1px solid #333;background:#eceff1;overflow:hidden;display:flex;align-items:flex-end;justify-content:center}
+  .ph .box svg,.ph .box img{width:100%;height:100%;object-fit:cover;display:block}
+  .ph .cap{font-size:9.5px;margin-top:2px;font-weight:700;text-align:center;white-space:nowrap}
+  .ph.sm .box{width:38px;height:46px}
+  .right.tres .ph .box{width:52px;height:62px}
+  .right.tres .ph.sm .box{width:36px;height:42px}
+  .right.tres{gap:2px}
+  .big{font-size:27px;font-weight:700;text-align:center;margin:8px 0 2px 0;letter-spacing:1px;white-space:nowrap}
+  .big.m{font-size:22px;margin:6px 0 0 0}
+  .foot{border-top:1.5px solid #000;padding-top:4px;font-size:11.5px;line-height:1.35}
+  .foot div{padding-left:18px}
+  .fim{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:120px;font-weight:700;letter-spacing:4px}
+  .idle{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center}
+  .idle .h{font-size:17px;font-weight:700;letter-spacing:1px}
+  .idle .p{font-size:12px}
+  .idle .wait{font-size:12px;margin-top:14px;animation:bl 1.2s steps(2,start) infinite}
+  @keyframes bl{to{visibility:hidden}}
+  /* terminal do mesário + controles */
+  .dock{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;justify-content:center;margin-top:28px;width:100%;max-width:760px}
+  .mesario{width:300px;border-radius:10px;padding:14px 14px 12px;background:linear-gradient(180deg,#e9ebe9,#cdd1cf);box-shadow:0 14px 30px rgba(0,0,0,.5),0 1px 0 #fff inset;color:#222}
+  .mesario .lbl{font-size:10px;letter-spacing:1.5px;color:#666;font-weight:700;margin-bottom:8px}
+  .mesario .ms{background:#0f1a14;border:5px solid #1a1a1a;border-radius:4px;padding:10px;color:#9fe3b9;font:12px/1.5 Menlo,Consolas,monospace;min-height:92px}
+  .mesario .ms b{color:#fff;font-weight:700}
+  .mesario button{margin-top:10px;width:100%;padding:9px;border:0;border-radius:6px;background:#1f7a4a;color:#fff;font-weight:700;font-size:13px;cursor:pointer;letter-spacing:.5px}
+  .mesario button:disabled{background:#7d8580;cursor:default}
+  .ctl{width:240px;color:#cfd3d1;font-size:13px;padding-top:4px}
+  .ctl summary{cursor:pointer;color:#8d9296;font-size:12px;letter-spacing:1px;text-transform:uppercase;margin-bottom:12px}
+  .ctl label{margin-bottom:12px}
+  .ctl label{display:flex;flex-direction:column;gap:6px}
+  .ctl .seg{display:flex;border:1px solid #666;border-radius:6px;overflow:hidden}
+  .ctl .seg button{flex:1;padding:7px;border:0;background:transparent;color:#cfd3d1;cursor:pointer;font-size:12px}
+  .ctl .seg button.on{background:#4b5157;color:#fff;font-weight:700}
+  .ctl input[type=range]{width:100%}
+  .hint{color:#8d9296;font-size:11.5px;line-height:1.5}
+  .hint kbd{background:#3b4045;border-radius:3px;padding:1px 5px;font-size:11px;color:#eee}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage" id="stage">
+    <div class="urna">
+      <div class="slot l"></div><div class="slot r"></div>
+      <div class="bezel"><div class="display" id="display"></div></div>
+
+      <div class="emb logo">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7f8f7"/><stop offset="1" stop-color="#b4b8b6"/></linearGradient></defs>
+          <ellipse cx="30" cy="28" rx="20" ry="20" fill="none" stroke="url(#g1)" stroke-width="5"/>
+          <path d="M8 44 L58 28 L54 44 Z" fill="url(#g1)"/>
+        </svg>
+        <div class="t">Justiça<br>Eleitoral</div>
+      </div>
+      <div class="emb model">UE2020</div>
+
+      <div class="keys" id="keys"></div>
+    </div>
+  </div>
+
+  <div class="dock">
+    <div class="mesario">
+      <div class="lbl">TERMINAL DO MESÁRIO</div>
+      <div class="ms" id="ms"></div>
+      <button id="btnLiberar">LIBERAR ELEITOR</button>
+    </div>
+    <details class="ctl">
+      <summary>Configurações</summary>
+      <label>Volume <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></label>
+      <div class="hint">Teclado físico também funciona: <kbd>0–9</kbd> números, <kbd>Enter</kbd> CONFIRMA, <kbd>Backspace</kbd> CORRIGE, <kbd>B</kbd> BRANCO.</div>
+      <div class="hint">Pegadinha: edite o objeto <kbd>PEGADINHA</kbd> no começo do script e coloque os áudios na pasta <kbd>sons/</kbd>.</div>
+    </details>
+  </div>
+</div>
+
+<script>
+/* ================= SOM (medido de gravações da urna real) =================
+   tecla   : 2300 Hz, ~20 ms
+   corrige : dois bips de tecla, 184 ms entre os inícios
+   confirma: trinado 2300 (20 ms) -> 2200/2300 alternando a cada ~90 ms, total 0,70 s
+   fim     : mesmo trinado, total 1,35 s
+*/
+const Som = (() => {
+  let ctx, master, vol = 0.8;
+  function ensure(){
+    if(!ctx){ ctx = new (window.AudioContext||window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = vol; master.connect(ctx.destination); }
+    if(ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+  function bip(t0, freq=2300, dur=0.022, amp=0.45){
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(amp, t0+0.002);
+    g.gain.setValueAtTime(amp, t0+dur-0.003); g.gain.linearRampToValueAtTime(0, t0+dur);
+    o.connect(g).connect(master); o.start(t0); o.stop(t0+dur+0.02);
+  }
+  function trinado(total){
+    const t0 = ctx.currentTime + 0.01;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    const A22 = 0.38, A23 = 0.28, SEG = 0.090;
+    o.type = 'sine';
+    let t = t0;
+    o.frequency.setValueAtTime(2300, t);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(A23, t+0.002);
+    t += 0.020;
+    let f = 2200, amp = A23;
+    while(t < t0 + total - 0.004){
+      const seg = Math.min(SEG, t0 + total - t);
+      o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(amp, t);                 // ancora o valor atual...
+      amp = (f===2200) ? A22 : A23;
+      g.gain.linearRampToValueAtTime(amp, t+0.003);  // ...e troca em 3 ms, sem estalo
+      t += seg; f = (f===2200) ? 2300 : 2200;
+    }
+    g.gain.setValueAtTime(amp, t);
+    g.gain.linearRampToValueAtTime(0, t+0.004);
+    o.connect(g).connect(master); o.start(t0); o.stop(t+0.03);
+  }
+  return {
+    setVol(v){ vol=v; if(master) master.gain.value=v; },
+    tecla(){ ensure(); bip(ctx.currentTime); },
+    corrige(){ ensure(); const t=ctx.currentTime; bip(t); bip(t+0.184); },
+    confirma(){ ensure(); trinado(0.70); },
+    fim(){ ensure(); trinado(1.35); },
+    unlock(){ ensure(); },
+    ctx(){ return ctx; }
+  };
+})();
+
+/* ================= PEGADINHA =================
+   cargo -> { 'número que a pessoa digita': { mostra: 'número do candidato que aparece', som: 'arquivo de áudio' } }
+   - 'mostra' precisa ser um número que exista na lista C daquele cargo.
+   - 'som' é tocado na hora em que o candidato trocado aparece na tela (coloque os mp3 na pasta sons/).
+     Se o arquivo não existir, toca uma fanfarra sintetizada só pra você testar.
+   - trocaNumero: true também troca os dígitos nas caixinhas; false deixa o número que a pessoa digitou.
+*/
+const PEGADINHA = {
+  pres: {
+    // digita 22 -> aparece o Flávio normal; no CONFIRMA toca o som de voto confirmado e a tela mostra o Lula (13)
+    '22': { mostra: '13', quando: 'confirma', espera: 2600, som: null },
+  },
+};
+/* quando: 'confirma' = a tela mostra o candidato digitado; ao apertar CONFIRMA aparece o 'mostra' (com o número dele)
+            por 'espera' ms junto com o som de voto confirmado, e depois a urna segue.
+   quando: 'digitar'  = a troca aparece assim que o número completa (trocaNumero diz se troca os dígitos também). */
+function pegadinha(cargo, n){ return (PEGADINHA[cargo.id] || {})[n] || null; }
+
+const SomExtra = (() => {
+  let atual = null, vol = 0.8;
+  function fanfarra(){ // fallback quando o mp3 não existe
+    Som.unlock();
+    const ctx = Som.ctx(); const t0 = ctx.currentTime + 0.02;
+    [[523,0],[659,0.14],[784,0.28],[1047,0.42],[784,0.62],[1047,0.76]].forEach(([f,dt]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'square'; o.frequency.value = f;
+      g.gain.setValueAtTime(0, t0+dt); g.gain.linearRampToValueAtTime(0.12*vol, t0+dt+0.01);
+      g.gain.setValueAtTime(0.12*vol, t0+dt+0.11); g.gain.linearRampToValueAtTime(0, t0+dt+0.16);
+      o.connect(g).connect(ctx.destination); o.start(t0+dt); o.stop(t0+dt+0.2);
+    });
+  }
+  return {
+    setVol(v){ vol = v; if(atual) atual.volume = v; },
+    tocar(src){
+      this.parar();
+      if(!src) return;
+      let caiu = false; const fallback = () => { if(!caiu){ caiu = true; fanfarra(); } };
+      const a = new Audio(src); a.volume = vol; atual = a;
+      a.addEventListener('error', fallback);
+      a.play().catch(fallback);
+    },
+    parar(){ if(atual){ atual.pause(); atual.currentTime = 0; atual = null; } },
+  };
+})();
+
+/* ================= DADOS ================= */
+const PARTIDOS = {
+  '13': {sigla:'PT', nome:'Partido dos Trabalhadores'},
+  '22': {sigla:'PL', nome:'Partido Liberal'},
+};
+const C = {
+  pres: [
+    {n:'13', nome:'LULA', vice:'', foto:'fotos/lula.jpg'},
+    {n:'22', nome:'FLÁVIO BOLSONARO', vice:'', foto:'fotos/flavio.jpg'},
+  ],
+};
+const TURNOS = {
+  1: [
+    {id:'pres', nome:'Presidente', dig:2, tipo:'maj', vice:'Vice-Presidente'},
+  ],
+};
+
+/* ================= ESTADO ================= */
+let turno = 1, estado = 'idle', idx = 0, num = '', modo = '', votos = [], fimTimer = null, prontoEm = 0, pausaTimer = null, trocando = null, trocaTimer = null;
+const PAUSA = 1000; // pausa técnica da urna: 1 s após o número completo
+function pronto(){ return Date.now() >= prontoEm; }
+function armarPausa(){ prontoEm = Date.now() + PAUSA; clearTimeout(pausaTimer); pausaTimer = setTimeout(render, PAUSA + 20); }
+const display = document.getElementById('display');
+const ms = document.getElementById('ms');
+const btnLiberar = document.getElementById('btnLiberar');
+
+function cargoAtual(){ return TURNOS[turno][idx]; }
+function candidato(cargo, n){ return (C[cargo.id]||[]).find(c => c.n === n) || null; }
+function partido(n){ return PARTIDOS[n.slice(0,2)] || null; }
+
+/* ================= RENDER ================= */
+const SIM = '<div class="sim">SIMULAÇÃO · URNA ELETRÔNICA</div>';
+function foto(seed, cap, small, src){
+  const hues = [205, 28, 140, 95, 330, 50, 260, 10];
+  const h = hues[seed % hues.length];
+  if(src) return `<div class="ph${small?' sm':''}"><div class="box"><img src="${src}" alt=""></div><div class="cap">${cap}</div></div>`;
+  return `<div class="ph${small?' sm':''}"><div class="box">
+    <svg viewBox="0 0 60 72"><rect width="60" height="72" fill="hsl(${h} 35% 88%)"/>
+    <circle cx="30" cy="27" r="13" fill="hsl(${h} 25% 38%)"/>
+    <path d="M6 72 C6 50 18 44 30 44 C42 44 54 50 54 72 Z" fill="hsl(${h} 25% 38%)"/></svg>
+  </div><div class="cap">${cap}</div></div>`;
+}
+function seedOf(s){ let x=0; for(const ch of s) x = (x*31 + ch.charCodeAt(0)) % 9973; return x; }
+function boxes(cargo, n){
+  n = (n === undefined) ? num : n;
+  let h = '<div class="digits">';
+  for(let i=0;i<cargo.dig;i++) h += `<div class="dg">${n[i]||''}</div>`;
+  return h + '</div>';
+}
+function foot(){
+  return `<div class="foot">Aperte a tecla:<div>VERDE para CONFIRMAR este voto</div><div>LARANJA para REINICIAR este voto</div></div>`;
+}
+function render(){
+  if(estado === 'idle'){
+    display.className = 'display on';
+    display.innerHTML = SIM + `<div class="idle">
+      <div class="h">JUSTIÇA ELEITORAL</div>
+      <div class="p">Eleições 2026 &nbsp;·&nbsp; ${turno}º Turno</div>
+      <div class="wait">Aguardando liberação do mesário</div>
+    </div>`;
+    return;
+  }
+  if(estado === 'fim'){
+    display.className = 'display on';
+    display.innerHTML = SIM + `<div class="fim">FIM</div>`;
+    return;
+  }
+  const cargo = cargoAtual();
+  const completo = num.length === cargo.dig;
+  const trapDig = (modo === '' && completo) ? pegadinha(cargo, num) : null;
+  const trap = trocando ? trocando : ((trapDig && trapDig.quando === 'digitar') ? trapDig : null);
+  const numMostrado = trap ? trap.mostra : num;
+  const cand = completo ? candidato(cargo, numMostrado) : null;
+  const part = num.length >= 2 ? partido(trap ? numMostrado : num) : null;
+  let left = `<div class="cargo">${cargo.nome}</div>` + (cargo.sub ? `<div class="sub">${cargo.sub}</div>` : '');
+  let right = '', rightCls = '';
+  let bottom = '';
+
+  const rodape = pronto() ? foot() : '';
+  if(modo === 'branco'){
+    left += `<div class="big" style="margin-top:34px">VOTO EM BRANCO</div>`;
+    bottom = rodape;
+  } else if(modo === 'legenda'){
+    left += `<div class="ln"><b>Número:</b>${boxes(cargo)}</div>
+             <div class="ln"><b>Partido:</b><span class="v">${part.sigla} - ${part.nome}</span></div>
+             <div class="big">VOTO DE LEGENDA</div>`;
+    bottom = rodape;
+  } else {
+    left += `<div class="ln"><b>Número:</b>${boxes(cargo, (trap && (trocando || trap.trocaNumero)) ? numMostrado : num)}</div>`;
+    if(cand){
+      left += `<div class="ln"><b>Nome:</b><span class="v">${cand.nome}</span></div>
+               <div class="ln"><b>Partido:</b><span class="v">${part ? part.sigla : ''}</span></div>`;
+      if(cargo.tipo === 'maj'){
+        if(cand.vice) left += `<div class="ln"><b>${cargo.vice}:</b><span class="v">${cand.vice}</span></div>`;
+        right = foto(seedOf(cand.nome), cargo.nome, false, cand.foto) + (cand.vice ? foto(seedOf(cand.vice), cargo.vice, false, cand.fotoVice) : '');
+      } else if(cargo.tipo === 'sen'){
+        left += `<div class="ln"><b>1º Suplente:</b><span class="v">${cand.sup1}</span></div>
+                 <div class="ln"><b>2º Suplente:</b><span class="v">${cand.sup2}</span></div>`;
+        right = foto(seedOf(cand.nome), cargo.nome, false, cand.foto) + foto(seedOf(cand.sup1), '1º Suplente', true) + foto(seedOf(cand.sup2), '2º Suplente', true);
+        rightCls = ' tres';
+      } else {
+        right = foto(seedOf(cand.nome), cargo.nome, false, cand.foto);
+      }
+      bottom = (trocando ? foot() : rodape);
+    } else if(completo){
+      left += `<div class="ln"><b>Nome:</b></div><div class="ln"><b>Partido:</b><span class="v">${part ? part.sigla : ''}</span></div>
+               <div class="big m">${part ? 'CANDIDATO INEXISTENTE' : 'NÚMERO ERRADO'}</div><div class="big m">VOTO NULO</div>`;
+      bottom = rodape;
+    } else {
+      left += `<div class="ln"><b>Nome:</b></div>
+               <div class="ln"><b>Partido:</b><span class="v">${(cargo.tipo==='prop' && part) ? part.sigla : ''}</span></div>`;
+      if(cargo.tipo === 'maj') left += `<div class="ln"><b>${cargo.vice}:</b></div>`;
+      if(cargo.tipo === 'sen') left += `<div class="ln"><b>1º Suplente:</b></div><div class="ln"><b>2º Suplente:</b></div>`;
+    }
+  }
+  display.className = 'display on';
+  display.innerHTML = SIM + `<div class="scr"><div class="svp">SEU VOTO PARA</div>
+    <div class="main"><div class="left">${left}</div><div class="right${rightCls}">${right}</div></div>${bottom}</div>`;
+}
+function renderMesario(){
+  const total = TURNOS[turno].length;
+  let txt = `<b>SEÇÃO 0001 · ZONA 001</b>\n`;
+  if(estado === 'idle') txt += `Urna pronta.\nEleitores votaram: ${votos.length ? votos.length/ total | 0 : 0}\n> aguardando liberação`;
+  else if(estado === 'vote') txt += `ELEITOR VOTANDO...\nCargo ${idx+1} de ${total}: ${cargoAtual().nome}`;
+  else txt += `Voto concluído.\n> FIM`;
+  ms.innerHTML = txt.replace(/\n/g,'<br>');
+  btnLiberar.disabled = estado !== 'idle';
+}
+
+/* ================= AÇÕES ================= */
+function liberar(){
+  if(estado !== 'idle') return;
+  Som.unlock();
+  estado = 'vote'; idx = 0; num = ''; modo = '';
+  render(); renderMesario();
+}
+function digito(d){
+  if(estado !== 'vote' || trocando) return;
+  Som.tecla();
+  if(modo) return;                     // em branco/legenda os números são ignorados
+  const cargo = cargoAtual();
+  if(num.length >= cargo.dig) return;
+  num += d;
+  if(num.length === cargo.dig){
+    armarPausa();
+    const trap = pegadinha(cargo, num);
+    if(trap && trap.quando === 'digitar') SomExtra.tocar(trap.som);
+  }
+  render();
+}
+function branco(){
+  if(estado !== 'vote' || trocando) return;
+  Som.tecla();
+  if(modo || num.length) return;       // só vale com o número vazio
+  modo = 'branco'; armarPausa(); render();
+}
+function corrige(){
+  if(estado !== 'vote' || trocando) return;
+  Som.corrige(); SomExtra.parar();
+  num = ''; modo = ''; clearTimeout(pausaTimer); render();
+}
+function confirma(){
+  if(estado !== 'vote' || trocando) return;
+  const cargo = cargoAtual();
+  const completo = num.length === cargo.dig;
+  if(modo === '' && !completo){
+    if(cargo.tipo === 'prop' && num.length === 2 && partido(num)){ Som.tecla(); modo = 'legenda'; armarPausa(); render(); }
+    else Som.tecla();                  // número incompleto: só o bip
+    return;
+  }
+  if(!pronto()){ Som.tecla(); return; }   // pausa técnica: CONFIRMA ignorado no 1º segundo
+  const trap = (modo === '') ? pegadinha(cargo, num) : null;
+  if(trap && trap.quando !== 'digitar'){
+    // troca na hora do CONFIRMA: som de voto confirmado + tela do outro candidato, depois a urna segue
+    trocando = trap; Som.confirma(); if(trap.som) SomExtra.tocar(trap.som);
+    render();
+    trocaTimer = setTimeout(() => { trocando = null; registrar(cargo, trap.mostra, true); }, trap.espera || 2500);
+    return;
+  }
+  registrar(cargo, modo || (trap ? trap.mostra : num), false);
+}
+function registrar(cargo, voto, semSom){
+  votos.push({cargo: cargo.nome + (cargo.sub ? ' '+cargo.sub : ''), voto});
+  idx++; num = ''; modo = '';
+  if(idx >= TURNOS[turno].length){
+    estado = 'fim'; render(); renderMesario(); Som.fim();
+    fimTimer = setTimeout(() => { estado = 'idle'; SomExtra.parar(); render(); renderMesario(); }, 3800);
+    if(semSom) Som.fim(); // o FIM sempre toca o pilili longo
+  } else {
+    if(!semSom) Som.confirma();
+    render(); renderMesario();
+  }
+}
+
+/* ================= TECLADO ================= */
+const BRAILLE = {'1':[1],'2':[1,2],'3':[1,4],'4':[1,4,5],'5':[1,5],'6':[1,2,4],'7':[1,2,4,5],'8':[1,2,5],'9':[2,4],'0':[2,4,5],
+  b:[1,2], r:[1,2,3,5], c:[1,4], o:[1,3,5], f:[1,2,4]};
+function cell(dots){ // ordem visual: linha a linha (1,4 / 2,5 / 3,6)
+  return [1,4,2,5,3,6].map(d => `<i class="${dots.includes(d)?'':'o'}"></i>`).join('');
+}
+const keysEl = document.getElementById('keys');
+const pos = {'1':[0,0],'2':[1,0],'3':[2,0],'4':[0,1],'5':[1,1],'6':[2,1],'7':[0,2],'8':[1,2],'9':[2,2],'0':[1,3]};
+for(const d in pos){
+  const [c,r] = pos[d];
+  const b = document.createElement('button');
+  b.className = 'key num'; b.dataset.k = d;
+  b.style.left = (c*66)+'px'; b.style.top = (r*47)+'px';
+  b.innerHTML = `<span class="n">${d}</span><span class="br">${cell(BRAILLE[d])}</span>`;
+  keysEl.appendChild(b);
+}
+[['branco','BRANCO','br','0'],['corrige','CORRIGE','co','1'],['confirma','CONFIRMA','cf','2']].forEach(([k,t,br,r]) => {
+  const b = document.createElement('button');
+  b.className = 'key fn ' + k; b.dataset.k = k;
+  b.style.left = '200px'; b.style.top = (r*47)+'px';
+  b.innerHTML = `<span class="t">${t}</span><span class="br">${[...br].map(ch => `<span class="cell">${cell(BRAILLE[ch])}</span>`).join('')}</span>`;
+  keysEl.appendChild(b);
+});
+function acionar(k){
+  if(k === 'branco') branco();
+  else if(k === 'corrige') corrige();
+  else if(k === 'confirma') confirma();
+  else digito(k);
+}
+keysEl.addEventListener('pointerdown', e => {
+  const b = e.target.closest('.key'); if(!b) return;
+  e.preventDefault(); acionar(b.dataset.k);
+});
+document.addEventListener('keydown', e => {
+  if(e.repeat) return;
+  let k = null;
+  if(/^[0-9]$/.test(e.key)) k = e.key;
+  else if(e.key === 'Enter') k = 'confirma';
+  else if(e.key === 'Backspace' || e.key === 'Delete') k = 'corrige';
+  else if(e.key === ' ' || e.key.toLowerCase() === 'b') k = 'branco';
+  if(!k) return;
+  e.preventDefault();
+  const b = keysEl.querySelector(`.key[data-k="${k}"]`);
+  if(b){ b.classList.add('down'); setTimeout(() => b.classList.remove('down'), 110); }
+  acionar(k);
+});
+
+/* ================= CONTROLES ================= */
+btnLiberar.addEventListener('click', liberar);
+document.getElementById('vol').addEventListener('input', e => { const v = parseFloat(e.target.value); Som.setVol(v); SomExtra.setVol(v); });
+
+/* escala pra caber na tela */
+function fit(){
+  const s = Math.min(1, (window.innerWidth - 32) / 760);
+  const st = document.getElementById('stage');
+  st.style.transform = `scale(${s})`;
+  st.style.marginBottom = (540 * s - 540) + 'px';
+}
+window.addEventListener('resize', fit); fit();
+render(); renderMesario();
+</script>
+</body>
+</html>
